@@ -3,7 +3,7 @@
 MODULE_big = jdbc2_fdw
 OBJS = jdbc2_fdw.o option.o deparse.o connection.o jq.o
 
-PG_CPPFLAGS = -I$(libpq_srcdir)
+PG_CPPFLAGS = -I$(libpq_srcdir) -std=gnu99
 SHLIB_LINK = $(libpq)
 
 EXTENSION = jdbc2_fdw

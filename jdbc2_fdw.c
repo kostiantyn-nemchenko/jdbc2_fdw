@@ -254,7 +254,12 @@ static ForeignScan *jdbcGetForeignPlan(PlannerInfo *root,
                        Oid foreigntableid,
                        ForeignPath *best_path,
                        List *tlist,
-                       List *scan_clauses);
+                       List *scan_clauses
+#if PG_VERSION_NUM >= 90500
+                       ,
+                       Plan *outer_plan
+#endif
+                     );
 static void jdbcBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *jdbcIterateForeignScan(ForeignScanState *node);
 static void postgresReScanForeignScan(ForeignScanState *node);
@@ -564,9 +569,14 @@ jdbcGetForeignPaths(PlannerInfo *root,
                                    fpinfo->rows,
                                    fpinfo->startup_cost,
                                    fpinfo->total_cost,
-                                   NIL, /* no pathkeys */
-                                   NULL,        /* no outer rel either */
-                                   NIL);        /* no fdw_private list */
+                                   NIL,  /* no pathkeys */
+                                   NULL, /* no outer rel either */
+                                   NIL   /* no extra plan */ 
+#if PG_VERSION_NUM >= 90500
+                                   ,
+                                   NIL  /* no fdw_private list */
+#endif
+                                  );
     add_path(baserel, (Path *) path);
 
     /*
@@ -585,7 +595,12 @@ jdbcGetForeignPlan(PlannerInfo *root,
                        Oid foreigntableid,
                        ForeignPath *best_path,
                        List *tlist,
-                       List *scan_clauses)
+                       List *scan_clauses
+#if PG_VERSION_NUM >= 90500
+                       ,
+                       Plan *outer_plan
+#endif
+                   )
 {
     ereport(DEBUG3, (errmsg("In jdbcGetForeignPlan")));
     PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) baserel->fdw_private;
@@ -716,7 +731,13 @@ jdbcGetForeignPlan(PlannerInfo *root,
                             local_exprs,
                             scan_relid,
                             params_list,
-                            fdw_private);
+                            fdw_private
+#if PG_VERSION_NUM >= 90500
+                            ,NIL /* no scan_tlist */
+                            ,NIL /* no remote quals */
+                            ,outer_plan
+#endif
+                           );
 }
 
 /*
@@ -1027,16 +1048,18 @@ postgresPlanForeignModify(PlannerInfo *root,
     }
     else if (operation == CMD_UPDATE)
     {
-        Bitmapset  *tmpset = bms_copy(rte->modifiedCols);
-        AttrNumber  col;
+	int			col;
 
-        while ((col = bms_first_member(tmpset)) >= 0)
-        {
-            col += FirstLowInvalidHeapAttributeNumber;
-            if (col <= InvalidAttrNumber)       /* shouldn't happen */
-                elog(ERROR, "system-column update is not supported");
-            targetAttrs = lappend_int(targetAttrs, col);
-        }
+	col = -1;
+	while ((col = bms_next_member(rte->updatedCols, col)) >= 0)
+	{
+	    /* bit numbers are offset by FirstLowInvalidHeapAttributeNumber */
+	    AttrNumber	attno = col + FirstLowInvalidHeapAttributeNumber;
+
+	    if (attno <= InvalidAttrNumber)		/* shouldn't happen */
+		elog(ERROR, "system-column update is not supported");
+	    targetAttrs = lappend_int(targetAttrs, attno);
+	}
     }
 
     /*
@@ -1938,15 +1961,15 @@ set_transmission_modes(void)
     if (DateStyle != USE_ISO_DATES)
         (void) set_config_option("datestyle", "ISO",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0);
+                                 GUC_ACTION_SAVE, true, 0, false);
     if (IntervalStyle != INTSTYLE_POSTGRES)
         (void) set_config_option("intervalstyle", "postgres",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0);
+                                 GUC_ACTION_SAVE, true, 0, false);
     if (extra_float_digits < 3)
         (void) set_config_option("extra_float_digits", "3",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0);
+                                 GUC_ACTION_SAVE, true, 0, false);
 
     return nestlevel;
 }
