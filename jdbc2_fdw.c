@@ -1961,15 +1961,27 @@ set_transmission_modes(void)
     if (DateStyle != USE_ISO_DATES)
         (void) set_config_option("datestyle", "ISO",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0, false);
+                                 GUC_ACTION_SAVE, true, 0
+#if PG_VERSION_NUM >= 90500
+                                 , false
+#endif
+                                );
     if (IntervalStyle != INTSTYLE_POSTGRES)
         (void) set_config_option("intervalstyle", "postgres",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0, false);
+                                 GUC_ACTION_SAVE, true, 0
+#if PG_VERSION_NUM >= 90500
+                                 , false
+#endif
+                                );
     if (extra_float_digits < 3)
         (void) set_config_option("extra_float_digits", "3",
                                  PGC_USERSET, PGC_S_SESSION,
-                                 GUC_ACTION_SAVE, true, 0, false);
+                                 GUC_ACTION_SAVE, true, 0
+#if PG_VERSION_NUM >= 90500
+                                 , false
+#endif
+                                );
 
     return nestlevel;
 }
